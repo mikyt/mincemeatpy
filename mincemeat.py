@@ -45,7 +45,7 @@ VERSION = 0.1
 
 DEFAULT_PORT = 11235
 
-
+logger = logging.getLogger(__name__)
 
 class Protocol(asynchat.async_chat):
     def __init__(self, conn=None):
@@ -233,6 +233,7 @@ Attributes:
                      idle workers (default: True)
     daemon: Like the daemon parameter of the threading.Thread object
             (default: True)
+    initialized: is the server completely initialized and bound to the TCP port?
 """
     def __init__(self, password="", port=DEFAULT_PORT):
         threading.Thread.__init__(self)
@@ -248,24 +249,29 @@ Attributes:
         self.relaunch_map = True
         self.relaunch_reduce = True
         
+        self.initialized = False
+        
         self.taskmanager = TaskManager(self)
         
         
     def __del__(self):
         self.close()
-        
+    
+    def initializing(self):
+        return self.isAlive() and not self.initialized
         
     def run(self):
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.bind(("", self.port))
-        self.listen(1)
+        self.set_reuse_addr()
         try:
+            self.bind(("", self.port))
+            self.listen(1)
+            self.initialized = True
             asyncore.loop()
         except:
+            logger.exception("MapReduce Server ERROR")
+        finally:
             self.close()
-            raise
-        
-        return self.taskmanager.results
 
         
     def handle_accept(self):
